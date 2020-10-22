@@ -1,7 +1,6 @@
 import random
 import sqlite3
-conn = sqlite3.connect('card.s3db')
-cur = conn.cursor()
+
 
 
 class BankingSystem:
@@ -9,6 +8,19 @@ class BankingSystem:
 
     def __init__(self):
         self.user_input = 0
+        self.cur, self.conn = self.create_table_of_cards()
+
+    def create_table_of_cards(self):
+        self.conn = sqlite3.connect('card.s3db')
+        self.cur = self.conn.cursor()
+        self.cur.execute("""CREATE TABLE IF NOT EXISTS card (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        number TEXT,
+                        pin TEXT,
+                        balance INTEGER DEFAULT 0
+                        )""")
+        self.conn.commit()
+        return self.cur, self.conn
 
     def show_main_menu(self):
         is_last_action = False
@@ -37,9 +49,9 @@ class BankingSystem:
             if not is_existing:
                 print("Your card has been created")
                 print(f"Your card number:\n{acc_number}\nYour card PIN:\n{pin}")
-                cur.execute("INSERT INTO card VALUES (:id, :account_number, :pin, :balance)",
+                self.cur.execute("INSERT INTO card VALUES (:id, :account_number, :pin, :balance)",
                         {"id": None, "account_number": acc_number, "pin": pin, "balance": 0})
-                conn.commit()
+                self.conn.commit()
 
     def add_checksum(self, account_number):  # Account Identifier
         sum_of_digits = self.sum_of_digits(account_number)
@@ -64,10 +76,9 @@ class BankingSystem:
     def check_if_exists(self, acc_number):
         return self.get_acc_data(acc_number)
 
-    @staticmethod
-    def get_acc_data(acc_number):
-        cur.execute("SELECT * FROM card WHERE number = :acc_number", {"acc_number": acc_number})
-        acc_data = cur.fetchone()
+    def get_acc_data(self, acc_number):
+        self.cur.execute("SELECT * FROM card WHERE number = :acc_number", {"acc_number": acc_number})
+        acc_data = self.cur.fetchone()
         return acc_data
 
     @staticmethod
@@ -79,10 +90,10 @@ class BankingSystem:
         return users_number, users_pin
 
     def log_in(self, users_number, users_pin):
-        cur.execute("SELECT * FROM card WHERE number = :num AND pin = :pin",
+        self.cur.execute("SELECT * FROM card WHERE number = :num AND pin = :pin",
                     {"num": users_number, "pin": users_pin})
-        acc_data = cur.fetchone()
-        conn.commit()
+        acc_data = self.cur.fetchone()
+        self.conn.commit()
         if acc_data is not None and self.is_account_num_valid(users_number):
             print("You have successfully logged in!")
             is_logged_in = True
@@ -153,33 +164,24 @@ class BankingSystem:
                 self.update_data(senders_acc_data, money_to_transfer, "subtract")
                 print("Success")
 
-    @staticmethod
-    def update_data(acc_data, money, operation):
+    def update_data(self, acc_data, money, operation):
         balance = acc_data[3]
         if operation == "add":
             balance += money
         elif operation == "subtract":
             balance -= money
-        cur.execute("UPDATE card SET balance = :balance WHERE id = :id",
+        self.cur.execute("UPDATE card SET balance = :balance WHERE id = :id",
                     {"balance": balance, "id": acc_data[0]})
-        conn.commit()
+        self.conn.commit()
 
-    @staticmethod
-    def close_account(acc_id):
-        cur.execute("DELETE FROM card WHERE id = :id",
+    def close_account(self, acc_id):
+        self.cur.execute("DELETE FROM card WHERE id = :id",
                     {"id": acc_id})
-        conn.commit()
+        self.conn.commit()
 
 
 def main():
     ing = BankingSystem()
-    cur.execute("""CREATE TABLE IF NOT EXISTS card (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    number TEXT,
-                    pin TEXT,
-                    balance INTEGER DEFAULT 0
-                    )""")
-    conn.commit()
     while not ing.show_main_menu():
         pass
 
